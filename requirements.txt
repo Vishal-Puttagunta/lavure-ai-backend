@@ -1,6 +1,6 @@
 fastapi
-supabase
-pdfkit
 uvicorn
 openai
 python-dotenv
+supabase
+weasyprint

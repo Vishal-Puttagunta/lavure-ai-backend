@@ -4,16 +4,13 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi.responses import FileResponse
 from supabase import create_client, Client
-import pdfkit
-from pdfkit.configuration import Configuration
+from weasyprint import HTML
 import os
 import uuid
 from collections import defaultdict
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-config = Configuration(wkhtmltopdf=r"C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe")
 
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
@@ -73,7 +70,7 @@ async def generate_report(request: ReportRequest):
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset=\"utf-8\">
+        <meta charset="utf-8">
         <style>
             body {{
                 font-family: 'Segoe UI', Tahoma, sans-serif;
@@ -106,6 +103,6 @@ async def generate_report(request: ReportRequest):
     """
 
     filename = f"report_{uuid.uuid4().hex}.pdf"
-    pdfkit.from_string(html_content, filename, configuration=config)
+    HTML(string=html_content).write_pdf(filename)
 
     return FileResponse(filename, media_type="application/pdf", filename="team-report.pdf")
