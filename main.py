@@ -23,7 +23,7 @@ supabase: Client = create_client(supabase_url, supabase_key)
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-frontend-production-url.com"],
+    allow_origins=["http://localhost:3000", "https://your-frontend-production-url.com", "https://prodai-iyfp-bmo2s63bw-vishal-puttaguntas-projects.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
