@@ -10,61 +10,66 @@ import os
 import uuid
 from collections import defaultdict
 
+# Load environment variables
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Connect to Supabase
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
+# Set up FastAPI app
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-frontend-production-url.com"],  # Add your frontend origin(s)
+    allow_origins=["http://localhost:3000", "https://your-frontend-production-url.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
+# Request model
 class ReportRequest(BaseModel):
     org_id: str
 
 @app.post("/generate-report")
 async def generate_report(request: ReportRequest):
-    # 🔄 Fetch real data from Supabase
+    # Fetch tasks from Supabase
     tasks_response = supabase.table("tasks").select("*").eq("team_id", request.org_id).execute()
     tasks = tasks_response.data
 
     total_tasks = len(tasks)
-    completed_tasks = sum(1 for t in tasks if t.get("status") == "done")
+    completed_tasks = sum(1 for t in tasks if str(t.get("status", "")).lower() == "finished")
+    organization_name = tasks[0].get("organization_name", "Unknown Org") if tasks else "Unknown Org"
 
+    # Build user summaries
     user_summary_map = defaultdict(lambda: {"assigned": 0, "completed": 0, "notes": []})
 
     for task in tasks:
-        uid = task.get("assigned_to") or "Unknown"
-        user_summary_map[uid]["assigned"] += 1
-        if task.get("status") == "done":
-            user_summary_map[uid]["completed"] += 1
+        username = task.get("username") or "Unknown"
+        user_summary_map[username]["assigned"] += 1
+        if str(task.get("status", "")).lower() == "finished":
+            user_summary_map[username]["completed"] += 1
         if task.get("notes"):
-            user_summary_map[uid]["notes"].append(task["notes"])
+            user_summary_map[username]["notes"].append(task["notes"])
 
-    # Format for GPT
     user_summaries = "\n".join([
-        f"{uid} – {info['completed']}/{info['assigned']} tasks completed. Notes: {'; '.join(info['notes']) or 'None'}"
-        for uid, info in user_summary_map.items()
+        f"{username} – {info['completed']}/{info['assigned']} tasks completed. Notes: {'; '.join(info['notes']) or 'None'}"
+        for username, info in user_summary_map.items()
     ])
 
+    # Construct the prompt for GPT
     prompt = (
         f"Generate a weekly productivity report for the team.\n"
         f"- Total Tasks: {total_tasks}\n"
         f"- Completed: {completed_tasks}\n"
-        f"- Org ID: {request.org_id}\n\n"
+        f"- Organization: {organization_name} (ID: {request.org_id})\n\n"
         f"Users:\n{user_summaries}\n\n"
         f"Format like a professional weekly team summary with highlights, snapshots, and upcoming goals."
     )
 
+    # Generate report text
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -74,8 +79,9 @@ async def generate_report(request: ReportRequest):
         max_tokens=800,
         temperature=0.7
     )
-
     report_text = response.choices[0].message.content
+
+    # Render HTML and PDF
     html_content = f"""
     <!DOCTYPE html>
     <html>
