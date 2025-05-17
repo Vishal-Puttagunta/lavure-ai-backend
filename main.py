@@ -23,13 +23,7 @@ supabase: Client = create_client(supabase_url, supabase_key)
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://lavureai.com",
-        "https://www.lavureai.com",
-        "https://prodai-iyfp-bmo2s63bw-vishal-puttaguntas-projects.vercel.app"
-    ],
+    allow_origins=["http://localhost:3000", "https://lavureai.com", "https://www.lavureai.com", "https://prodai-iyfp-bmo2s63bw-vishal-puttaguntas-projects.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,34 +55,35 @@ async def generate_report(request: ReportRequest):
             user_summary_map[username]["notes"].append(task["notes"])
 
     user_summaries = "\n".join([
-        f"{username}: {info['completed']}/{info['assigned']} tasks completed. Notes: {'; '.join(info['notes']) or 'None'}"
+        f"{username} – {info['completed']}/{info['assigned']} tasks completed. Notes: {'; '.join(info['notes']) or 'None'}"
         for username, info in user_summary_map.items()
     ])
 
-    # Construct GPT prompt
+    # Construct the prompt for GPT
     prompt = (
-        f"Generate a weekly productivity report for the team in clean, readable HTML format. "
-        f"Use structured sections with headings, bullet points, and tables where appropriate. Avoid markdown, asterisks, or code blocks.\n\n"
+        f"Generate a weekly productivity report for the team.\n"
         f"- Total Tasks: {total_tasks}\n"
         f"- Completed: {completed_tasks}\n"
         f"- Organization: {organization_name} (ID: {request.org_id})\n\n"
         f"Users:\n{user_summaries}\n\n"
+        f"Format like a professional weekly team summary with highlights, snapshots, and upcoming goals."
+        f"Be sure to make it pleasant to read with a clean look making it simple to follow along"
     )
 
-    # Generate report HTML from GPT-4o
+    # Generate report text
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an AI assistant generating clean, professional HTML reports for productivity summaries."},
+            {"role": "system", "content": "You are an AI assistant generating professional team productivity reports."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=1000,
+        max_tokens=800,
         temperature=0.7
     )
-    report_html = response.choices[0].message.content
+    report_text = response.choices[0].message.content
 
-    # Render final HTML for PDF
-    full_html = f"""
+    # Render HTML and PDF
+    html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
@@ -98,42 +93,33 @@ async def generate_report(request: ReportRequest):
                 font-family: 'Segoe UI', Tahoma, sans-serif;
                 font-size: 16px;
                 color: #222;
-                line-height: 1.7;
+                line-height: 1.8;
                 padding: 40px;
             }}
-            h1, h2, h3 {{
+            h1 {{
+                font-size: 28px;
                 color: #0077cc;
                 margin-bottom: 10px;
             }}
-            p {{
-                margin-bottom: 15px;
+            hr {{
+                margin: 20px 0;
             }}
-            ul, ol {{
-                margin-bottom: 20px;
-                padding-left: 25px;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin-bottom: 20px;
-            }}
-            th, td {{
-                border: 1px solid #ccc;
-                padding: 8px;
-                text-align: left;
-            }}
-            th {{
-                background-color: #f4f4f4;
+            pre {{
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-size: 16px;
             }}
         </style>
     </head>
     <body>
-        {report_html}
+        <h1>Team Productivity Report</h1>
+        <hr>
+        <pre>{report_text}</pre>
     </body>
     </html>
     """
 
     filename = f"report_{uuid.uuid4().hex}.pdf"
-    HTML(string=full_html).write_pdf(filename)
+    HTML(string=html_content).write_pdf(filename)
 
     return FileResponse(filename, media_type="application/pdf", filename="team-report.pdf")
